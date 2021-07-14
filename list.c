@@ -2,9 +2,37 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include "list.h"
-#include "macroj.h"
 
 #define T List_T
+
+#define CHECK_POINTER_RETURN(P, R) \
+    if (P == NULL)                 \
+    {                              \
+        return R;                  \
+    }
+
+#define CHECK_POINTER_RETURN_NULL(P) \
+    CHECK_POINTER_RETURN(P, NULL)
+
+#define CHECK_POINTER_RETURN_VOID(P) \
+    if (P == NULL)                   \
+    {                                \
+        return;                      \
+    }
+
+#define IF_NOT_NULL(P, CODE) \
+    if (P != NULL)           \
+    {                        \
+        CODE                 \
+    }
+
+#define IF_NULL(P, CODE) \
+    if (P == NULL)       \
+    {                    \
+        CODE             \
+    }
+
+#define SET_ERROR error && (*error = errToSet);
 
 struct Node
 {
@@ -63,24 +91,32 @@ static int defaultComparator(void *x, void *y)
     return x == y;
 }
 
-static void *defaultDuplicator(void *x)
+static void *defaultDuplicator(void *x, int *error)
 {
     return x;
 }
 
-T List_create(Comparator c, Duplicator du, Deallocator de)
+T List_create(Comparator c, Duplicator du, Deallocator de, int *error)
 {
+    int errToSet = 0;
     T newList = malloc(sizeof(*newList));
 
-    CHECK_POINTER_RETURN_NULL(newList);
+    if (newList == NULL)
+    {
+        errToSet = E_LIST_MALLOC;
+    }
 
-    newList->length = 0;
-    newList->head = NULL;
-    newList->tail = NULL;
-    newList->comparator = c ? c : defaultComparator;
-    newList->duplicator = du ? du : defaultDuplicator;
-    newList->deallocator = de;
+    if (!errToSet)
+    {
+        newList->length = 0;
+        newList->head = NULL;
+        newList->tail = NULL;
+        newList->comparator = c ? c : defaultComparator;
+        newList->duplicator = du ? du : defaultDuplicator;
+        newList->deallocator = de;
+    }
 
+    SET_ERROR
     return newList;
 }
 
@@ -95,90 +131,187 @@ static void List__free(struct Node **nodePtr, Deallocator d, int freeElement)
     Node_free(nodePtr, freeElement);
 }
 
-void List_free(T *listPtr, int freeElement)
+void List_free(T *listPtr, int freeElement, int *error)
 {
-    CHECK_POINTER_RETURN_VOID(listPtr);
-    CHECK_POINTER_RETURN_VOID(*listPtr);
+    int errToSet = 0;
 
-    if ((*listPtr)->length != 0)
+    if (listPtr == NULL || *listPtr == NULL)
     {
-        List__free(&(*listPtr)->head, (*listPtr)->deallocator, freeElement);
+        errToSet = E_LIST_NULL;
     }
 
-    free(*listPtr);
-    *listPtr = NULL;
+    if (!errToSet)
+    {
+        if ((*listPtr)->length != 0)
+        {
+            List__free(&(*listPtr)->head, (*listPtr)->deallocator, freeElement);
+        }
+
+        free(*listPtr);
+        *listPtr = NULL;
+    }
+
+    SET_ERROR
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // RETRIEVE COMPARATOR / DEALLOCATOR
 
-Comparator List_getComparator(T list)
+Comparator List_getComparator(T list, int *error)
 {
-    return list->comparator;
+    int errToSet = 0;
+    Comparator c = NULL;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+
+    if (!errToSet)
+    {
+        c = list->comparator;
+    }
+
+    SET_ERROR
+    return c;
 }
 
-Duplicator List_getDuplicator(T list)
+Duplicator List_getDuplicator(T list, int *error)
 {
-    return list->duplicator;
+    int errToSet = 0;
+    Duplicator d = NULL;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+
+    if (!errToSet)
+    {
+        d = list->duplicator;
+    }
+
+    SET_ERROR
+    return d;
 }
 
-Deallocator List_getDeallocator(T list)
+Deallocator List_getDeallocator(T list, int *error)
 {
-    return list->deallocator;
+    int errToSet = 0;
+    Deallocator d = NULL;
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+
+    if (!errToSet)
+    {
+        d = list->deallocator;
+    }
+
+    SET_ERROR
+    return d;
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // INSERT REPLACING THE HEAD / TAIL
 
-void List_insertHead(T list, void *element)
+void List_insertHead(T list, void *element, int *error)
 { // O(1)
 
-    CHECK_POINTER_RETURN_VOID(list);
-    CHECK_POINTER_RETURN_VOID(element);
+    int errToSet = 0;
+    struct Node *newNode = NULL;
+    size_t listLength = 0;
 
-    struct Node *newNode = Node_create(element, list->head, NULL);
-
-    CHECK_POINTER_RETURN_VOID(newNode);
-
-    size_t listLength = List_length(list);
-
-    if (listLength == 0)
+    if (list == NULL)
     {
-        list->tail = newNode;
-    }
-    else
-    {
-        list->head->prev = newNode;
+        errToSet = E_LIST_NULL;
     }
 
-    list->head = newNode;
-    list->length++;
+    if (!errToSet && element == NULL)
+    {
+        errToSet = E_LIST_NULL_ELEMENT;
+    }
+
+    if (!errToSet)
+    {
+        newNode = Node_create(element, list->head, NULL);
+
+        if (newNode == NULL)
+        {
+            errToSet = E_LIST_MALLOC;
+        }
+    }
+
+    if (!errToSet)
+    {
+        listLength = List_length(list, &errToSet);
+    }
+
+    if (!errToSet)
+    {
+
+        if (listLength == 0)
+        {
+            list->tail = newNode;
+        }
+        else
+        {
+            list->head->prev = newNode;
+        }
+
+        list->head = newNode;
+        list->length++;
+    }
+
+    SET_ERROR
 }
 
-void List_insertTail(T list, void *element)
+void List_insertTail(T list, void *element, int *error)
 { // O(1)
 
-    CHECK_POINTER_RETURN_VOID(list);
-    CHECK_POINTER_RETURN_VOID(element);
+    int errToSet = 0;
+    struct Node *newNode = NULL;
 
-    struct Node *newNode = Node_create(element, NULL, list->tail);
-
-    CHECK_POINTER_RETURN_VOID(newNode);
-
-    if (list->tail != NULL)
+    if (list == NULL)
     {
-        // list->tail == NULL <=> list.length == 0
-        list->tail->next = newNode;
-    }
-    else
-    {
-        list->head = newNode;
+        errToSet = E_LIST_NULL;
     }
 
-    list->tail = newNode;
-    list->length++;
+    if (!errToSet && element == NULL)
+    {
+        errToSet = E_LIST_NULL_ELEMENT;
+    }
+
+    if (!errToSet)
+    {
+        newNode = Node_create(element, NULL, list->tail);
+
+        if (newNode == NULL)
+        {
+            errToSet = E_LIST_MALLOC;
+        }
+    }
+
+    if (!errToSet)
+    {
+        if (list->tail != NULL)
+        {
+            // list->tail == NULL <=> list.length == 0
+            list->tail->next = newNode;
+        }
+        else
+        {
+            list->head = newNode;
+        }
+
+        list->tail = newNode;
+        list->length++;
+    }
+
+    SET_ERROR
 }
 
 // -----------------------------------------------------------------------------
@@ -206,59 +339,120 @@ static void List__insertOrdered(struct Node **nodePtr, void *element, Comparator
     }
 }
 
-void List_insertOrdered(T list, void *element, int order)
+void List_insertOrdered(T list, void *element, int order, int *error)
 {
-    CHECK_POINTER_RETURN_VOID(list);
-    CHECK_POINTER_RETURN_VOID(element);
+    Comparator c = NULL;
+    int errToSet = 0;
+    size_t listLength = 0;
 
-    Comparator c = list->comparator;
-
-    size_t listLength = List_length(list);
-    if (listLength == 0)
+    if (list == NULL)
     {
-        List_insertHead(list, element);
-        return;
+        errToSet = E_LIST_NULL;
     }
 
-    int compareResultH = c(list->head->element, element);
-    // the list has at least one element
-    if ((compareResultH < 0 && order == 0) || (compareResultH >= 0 && order == 1))
+    if (!errToSet && element == NULL)
     {
-        List_insertHead(list, element);
-        return;
+        errToSet = E_LIST_NULL_ELEMENT;
     }
 
-    int compareResultT = c(list->tail->element, element);
-    if ((compareResultT >= 0 && order == 0) || (compareResultT < 0 && order == 1))
+    if (!errToSet)
     {
-        List_insertTail(list, element);
-        return;
+        c = list->comparator;
+        int innerError = 0;
+
+        listLength = List_length(list, &innerError);
+
+        errToSet = innerError;
     }
 
-    // the list has at least two elements
-    // and the new one hasn't to be inserted as the first one nor as the last one
-    struct Node **firstNodePtr = &(list->head);
-    List__insertOrdered(firstNodePtr, element, c, order);
+    if (!errToSet && listLength == 0)
+    {
+        int innerError = 0;
 
-    list->length++;
+        List_insertHead(list, element, &innerError);
+
+        errToSet = innerError;
+    }
+
+    if (!errToSet && listLength != 0)
+    {
+        int innerError = 0;
+
+        int compareResultH = c(list->head->element, element);
+        // the list has at least one element
+        if ((compareResultH < 0 && order == 0) || (compareResultH >= 0 && order == 1))
+        {
+            List_insertHead(list, element, &innerError);
+            errToSet = innerError;
+            SET_ERROR;
+            return;
+        }
+
+        int compareResultT = c(list->tail->element, element);
+        if ((compareResultT >= 0 && order == 0) || (compareResultT < 0 && order == 1))
+        {
+            List_insertTail(list, element, &innerError);
+            errToSet = innerError;
+            SET_ERROR;
+            return;
+        }
+
+        // the list has at least two elements
+        // and the new one hasn't to be inserted as the first one nor as the last one
+        struct Node **firstNodePtr = &(list->head);
+        List__insertOrdered(firstNodePtr, element, c, order);
+        list->length++;
+    }
+
+    SET_ERROR
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // PICK AN ELEMENT FROM THE HEAD / TAIL
 
-void *List_pickHead(T list)
+void *List_pickHead(T list, int *error)
 {
-    CHECK_POINTER_RETURN_NULL(list);
+    int errToSet = 0;
+    void *toRet = NULL;
 
-    return list->head->element;
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+    else if (list->head == NULL)
+    {
+        errToSet = E_LIST_EMPTY_LIST;
+    }
+    else
+    {
+        toRet = list->head->element;
+    }
+
+    SET_ERROR
+    return toRet;
 }
 
-void *List_pickTail(T list)
+void *List_pickTail(T list, int *error)
 {
-    CHECK_POINTER_RETURN_NULL(list);
+    int errToSet = 0;
+    void *toRet = NULL;
 
-    return list->tail->element;
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+    else if (list->head == NULL)
+    {
+        errToSet = E_LIST_EMPTY_LIST;
+    }
+    else
+    {
+        toRet = list->tail->element;
+    }
+
+    SET_ERROR
+    return toRet;
 }
 
 // -----------------------------------------------------------------------------
@@ -288,73 +482,126 @@ static void *List__find(struct Node *node, Predicate f)
     return foundNode->element;
 }
 
-void *List_findPick(T list, Predicate f)
+void *List_findPick(T list, Predicate f, int *error)
 {
-    CHECK_POINTER_RETURN_NULL(list);
-    return List__find(list->head, f);
+    int errToSet = 0;
+    void *toRet = NULL;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+    else
+    {
+        toRet = List__find(list->head, f);
+    }
+
+    SET_ERROR;
+    return toRet;
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // EXTRACT AN ELEMENT FROM THE HEAD / TAIL
 
-void *List_extractHead(T list)
+void *List_extractHead(T list, int *error)
 {
-    CHECK_POINTER_RETURN_NULL(list);
+    int errToSet = 0;
+    size_t listLength = 0;
+    void *elementToRet = NULL;
 
-    // empty list
-    CHECK_POINTER_RETURN_NULL(list->head);
-
-    size_t listLength = List_length(list);
-    struct Node *nodeToExtract = list->head;
-    void *elementToRet = nodeToExtract->element;
-
-    if (listLength == 1)
+    if (list == NULL)
     {
-        list->head = NULL;
-        list->tail = NULL;
+        errToSet = E_LIST_NULL;
     }
 
-    if (listLength > 1)
+    if (!errToSet && list->head == NULL)
     {
-        list->head = list->head->next;
-        list->head->prev = NULL;
+        errToSet = E_LIST_EMPTY_LIST;
     }
 
-    Node_free(&nodeToExtract, 0);
+    if (!errToSet)
+    {
+        int innerError = 0;
 
-    list->length--;
+        listLength = List_length(list, &innerError);
 
+        errToSet = innerError;
+    }
+
+    if (!errToSet)
+    {
+        struct Node *nodeToExtract = list->head;
+        elementToRet = nodeToExtract->element;
+
+        if (listLength == 1)
+        {
+            list->head = NULL;
+            list->tail = NULL;
+        }
+
+        if (listLength > 1)
+        {
+            list->head = list->head->next;
+            list->head->prev = NULL;
+        }
+
+        Node_free(&nodeToExtract, 0);
+
+        list->length--;
+    }
+
+    SET_ERROR;
     return elementToRet;
 }
 
-void *List_extractTail(T list)
+void *List_extractTail(T list, int *error)
 {
-    // O(1)
-    CHECK_POINTER_RETURN_NULL(list);
+    int errToSet = 0;
+    size_t listLength = 0;
+    void *elementToRet = NULL;
 
-    // empty list
-    CHECK_POINTER_RETURN_NULL(list->tail);
-
-    size_t listLength = List_length(list);
-    struct Node *nodeToExtract = list->tail;
-    void *elementToRet = nodeToExtract->element;
-
-    if (listLength == 1)
+    if (list == NULL)
     {
-        list->head = NULL;
-        list->tail = NULL;
-    }
-    if (listLength > 1)
-    {
-        list->tail = list->tail->prev;
-        list->tail->next = NULL;
+        errToSet = E_LIST_NULL;
     }
 
-    Node_free(&nodeToExtract, 0);
+    if (!errToSet && list->tail == NULL)
+    {
+        errToSet = E_LIST_EMPTY_LIST;
+    }
 
-    list->length--;
+    if (!errToSet)
+    {
+        int innerError = 0;
 
+        listLength = List_length(list, &innerError);
+
+        errToSet = innerError;
+    }
+
+    if (!errToSet)
+    {
+        struct Node *nodeToExtract = list->tail;
+        elementToRet = nodeToExtract->element;
+
+        if (listLength == 1)
+        {
+            list->head = NULL;
+            list->tail = NULL;
+        }
+        if (listLength > 1)
+        {
+            list->tail = list->tail->prev;
+            list->tail->next = NULL;
+        }
+
+        Node_free(&nodeToExtract, 0);
+
+        list->length--;
+    }
+
+    SET_ERROR;
     return elementToRet;
 }
 
@@ -362,145 +609,227 @@ void *List_extractTail(T list)
 // -----------------------------------------------------------------------------
 // FIND AND EXTRACT AN ELEMENT
 
-void *List_findExtract(T list, Predicate f)
+void *List_findExtract(T list, Predicate f, int *error)
 {
-    CHECK_POINTER_RETURN_NULL(list);
+    int errToSet = 0;
+    void *elementToRet = NULL;
 
-    struct Node *nodeToExtract = List__findNode(list->head, f);
-
-    CHECK_POINTER_RETURN_NULL(nodeToExtract);
-
-    void *elementToRet = nodeToExtract->element;
-
-    if (nodeToExtract == list->head)
+    if (list == NULL)
     {
-        return List_extractHead(list);
+        errToSet = E_LIST_NULL;
     }
 
-    if (nodeToExtract == list->tail)
+    if (!errToSet)
     {
-        return List_extractTail(list);
+        struct Node *nodeToExtract = List__findNode(list->head, f);
+
+        if (nodeToExtract)
+        {
+            if (nodeToExtract == list->head)
+            {
+                return List_extractHead(list, error);
+            }
+            else if (nodeToExtract == list->tail)
+            {
+                return List_extractTail(list, error);
+            }
+            else
+            {
+                elementToRet = nodeToExtract->element;
+
+                nodeToExtract->next->prev = nodeToExtract->prev;
+                nodeToExtract->prev->next = nodeToExtract->next;
+
+                Node_free(&nodeToExtract, 0);
+
+                list->length--;
+            }
+        }
     }
 
-    nodeToExtract->next->prev = nodeToExtract->prev;
-    nodeToExtract->prev->next = nodeToExtract->next;
-
-    Node_free(&nodeToExtract, 0);
-
-    list->length--;
-
+    SET_ERROR;
     return elementToRet;
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // DELETE HEAD / TAIL
-
-void List_deleteHead(T list)
+void List_deleteHead(T list, int *error)
 {
-    CHECK_POINTER_RETURN_VOID(list);
+
+    int errToSet = 0;
+    size_t listLength = 0;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
 
     // empty list
-    CHECK_POINTER_RETURN_VOID(list->head);
-
-    size_t listLength = List_length(list);
-    struct Node *nodeToRemove = list->head;
-
-    if (listLength == 1)
+    if (!errToSet && list->head == NULL)
     {
-        list->head = NULL;
-        list->tail = NULL;
+        errToSet = E_LIST_EMPTY_LIST;
     }
 
-    if (listLength > 1)
+    if (!errToSet)
     {
-        list->head = list->head->next;
-        list->head->prev = NULL;
+        int innerError = 0;
+
+        listLength = List_length(list, &innerError);
+
+        errToSet = innerError;
     }
 
-    IF_NOT_NULL(
-        list->deallocator,
-        list->deallocator(nodeToRemove->element););
+    if (!errToSet)
+    {
+        struct Node *nodeToRemove = list->head;
 
-    Node_free(&nodeToRemove, 1);
+        if (listLength == 1)
+        {
+            list->head = NULL;
+            list->tail = NULL;
+        }
 
-    list->length--;
+        if (listLength > 1)
+        {
+            list->head = list->head->next;
+            list->head->prev = NULL;
+        }
+
+        IF_NOT_NULL(
+            list->deallocator,
+            list->deallocator(nodeToRemove->element););
+
+        Node_free(&nodeToRemove, 1);
+
+        list->length--;
+    }
+
+    SET_ERROR;
 }
 
-void List_deleteTail(T list)
+void List_deleteTail(T list, int *error)
 {
-    CHECK_POINTER_RETURN_VOID(list);
+    int errToSet = 0;
+    size_t listLength = 0;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
 
     // empty list
-    CHECK_POINTER_RETURN_VOID(list->tail);
-
-    size_t listLength = List_length(list);
-    struct Node *nodeToRemove = list->tail;
-
-    if (listLength == 1)
+    if (!errToSet && list->tail == NULL)
     {
-        list->head = NULL;
-        list->tail = NULL;
-    }
-    if (listLength > 1)
-    {
-        list->tail = list->tail->prev;
-        list->tail->next = NULL;
+        errToSet = E_LIST_EMPTY_LIST;
     }
 
-    IF_NOT_NULL(
-        list->deallocator,
-        list->deallocator(nodeToRemove->element););
+    if (!errToSet)
+    {
+        int innerError = 0;
 
-    Node_free(&nodeToRemove, 1);
+        listLength = List_length(list, &innerError);
 
-    list->length--;
+        errToSet = innerError;
+    }
+
+    if (!errToSet)
+    {
+        struct Node *nodeToRemove = list->tail;
+
+        if (listLength == 1)
+        {
+            list->head = NULL;
+            list->tail = NULL;
+        }
+        if (listLength > 1)
+        {
+            list->tail = list->tail->prev;
+            list->tail->next = NULL;
+        }
+
+        IF_NOT_NULL(
+            list->deallocator,
+            list->deallocator(nodeToRemove->element););
+
+        Node_free(&nodeToRemove, 1);
+
+        list->length--;
+    }
+
+    SET_ERROR;
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // FIND AND DELETE AN ELEMENT
 
-void List_findDelete(T list, Predicate f)
+void List_findDelete(T list, Predicate f, int *error)
 {
-    CHECK_POINTER_RETURN_VOID(list);
+    int errToSet = 0;
 
-    struct Node *nodeToRemove = List__findNode(list->head, f);
-
-    CHECK_POINTER_RETURN_VOID(nodeToRemove);
-
-    if (nodeToRemove == list->head)
+    if (list == NULL)
     {
-        List_deleteHead(list);
-        return;
+        errToSet = E_LIST_NULL;
     }
 
-    if (nodeToRemove == list->tail)
+    if (!errToSet)
     {
-        List_deleteTail(list);
-        return;
+        struct Node *nodeToRemove = List__findNode(list->head, f);
+
+        if (nodeToRemove)
+        {
+            if (nodeToRemove == list->head)
+            {
+                List_deleteHead(list, error);
+                return;
+            }
+
+            if (nodeToRemove == list->tail)
+            {
+                List_deleteTail(list, error);
+                return;
+            }
+            else
+            {
+                nodeToRemove->next->prev = nodeToRemove->prev;
+                nodeToRemove->prev->next = nodeToRemove->next;
+
+                IF_NOT_NULL(
+                    list->deallocator,
+                    list->deallocator(nodeToRemove->element););
+
+                Node_free(&nodeToRemove, 1);
+
+                list->length--;
+            }
+        }
     }
 
-    nodeToRemove->next->prev = nodeToRemove->prev;
-    nodeToRemove->prev->next = nodeToRemove->next;
-
-    IF_NOT_NULL(
-        list->deallocator,
-        list->deallocator(nodeToRemove->element););
-
-    Node_free(&nodeToRemove, 1);
-
-    list->length--;
+    SET_ERROR;
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // CHECK IF AN ELEMENT SATISFIES A PREDICATE
 
-int List_any(T list, Predicate f)
+int List_any(T list, Predicate f, int *error)
 {
-    CHECK_POINTER_RETURN(list, 0);
-    return List__find(list->head, f) != NULL;
+    int errToSet = 0;
+    int toRet = 0;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+
+    if (!errToSet)
+    {
+        toRet = list->head ? List__find(list->head, f) != NULL : 0;
+    }
+
+    SET_ERROR;
+    return toRet;
 }
 
 // -----------------------------------------------------------------------------
@@ -521,20 +850,123 @@ static int List__all(struct Node *node, Predicate f)
     }
 }
 
-int List_all(T list, Predicate f)
+int List_all(T list, Predicate f, int *error)
 {
-    CHECK_POINTER_RETURN(list, 1);
-    return List__all(list->head, f);
+    int errToSet = 0;
+    int toRet = 1;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+
+    if (!errToSet)
+    {
+        toRet = List__all(list->head, f);
+    }
+
+    SET_ERROR;
+    return toRet;
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // GET THE LENGTH
 
-size_t List_length(T list)
+size_t List_length(T list, int *error)
 {
-    CHECK_POINTER_RETURN(list, (size_t)0);
-    return list->length;
+    int errToSet = 0;
+    size_t toRet = 0;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+    else
+    {
+        toRet = list->length;
+    }
+
+    SET_ERROR;
+    return toRet;
+}
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// FIND SOMETHING KNOWN
+
+extern int List_search(T list, Comparator c, void *toFind, int *error)
+{
+    int errToSet = 0;
+    size_t found = 0;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+    else
+    {
+        struct Node *runner = list->head;
+        while (runner != NULL && !found)
+        {
+            found = c(toFind, runner->element);
+            runner = runner->next;
+        }
+    }
+
+    SET_ERROR;
+    return found;
+}
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// FIND SOMETHING KNOWN
+
+extern void* List_searchExtract(T list, Comparator c, void *toFind, int *error)
+{
+    int errToSet = 0;
+    struct Node *nodeToExtract = NULL;
+    void *toRet = NULL;
+    size_t found = 0;
+
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+    else
+    {
+        struct Node *runner = list->head;
+        while (runner != NULL && !found)
+        {
+            found = c(toFind, runner->element);
+            nodeToExtract = runner;
+            runner = runner->next;
+        }
+    }
+
+    if (found)
+    {
+        if (nodeToExtract == list->head)
+        {
+            toRet = List_extractHead(list, &errToSet);
+        }
+        else if (nodeToExtract == list->tail)
+        {
+            toRet = List_extractTail(list, &errToSet);
+        }
+        else
+        {
+            toRet = nodeToExtract->element;
+            nodeToExtract->next->prev = nodeToExtract->prev;
+            nodeToExtract->prev->next = nodeToExtract->next;
+
+            Node_free(&nodeToExtract, 0);
+            list->length--;
+        }
+    }
+
+    SET_ERROR;
+    return toRet;
 }
 
 // -----------------------------------------------------------------------------
@@ -581,86 +1013,254 @@ static struct Node *List__reverse(struct Node *node)
     return futureHead;
 }
 
-void List_reverse(T list)
+void List_reverse(T list, int *error)
 {
-    if (List_length(list) <= 1)
+    int errToSet = 0;
+    size_t listLength = 0;
+    int alreadyReversed = 0;
+
+    if (list == NULL)
     {
-        return;
+        errToSet = E_LIST_NULL;
     }
 
-    // there are at least 2 elements
-    struct Node *newTail = list->head;
-    list->head = List__reverse(list->head);
-    list->tail = newTail;
+    if (!errToSet)
+    {
+        int innerError = 0;
+
+        listLength = List_length(list, &innerError);
+
+        errToSet = innerError;
+    }
+
+    if (!errToSet && listLength <= 1)
+    {
+        alreadyReversed = 1;
+    }
+
+    if (!errToSet && !alreadyReversed)
+    {
+        // there are at least 2 elements
+        struct Node *newTail = list->head;
+        list->head = List__reverse(list->head);
+        list->tail = newTail;
+    }
+
+    SET_ERROR
+    return;
 }
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // REDUCE - FILTER - MAP
 
-void *List_reduce(T list, Reducer reducer, void *initialValue)
+void *List_reduce(T list, Reducer reducer, void *initialValue, int *error)
 {
     void *accumulator = initialValue;
+    int errToSet = 0;
 
-    struct Node *runner = list->head;
-    while (runner != NULL)
+    if (list == NULL)
     {
-        accumulator = reducer(accumulator, runner->element);
-        runner = runner->next;
+        errToSet = E_LIST_NULL;
     }
+
+    if (!errToSet && (initialValue == NULL || reducer == NULL))
+    {
+        errToSet = E_LIST_INVALID_ARGUMENTS;
+    }
+
+    if (!errToSet)
+    {
+        struct Node *runner = list->head;
+        while (runner != NULL && !errToSet)
+        {
+            accumulator = reducer(accumulator, runner->element, &errToSet);
+            runner = !errToSet ? runner->next : NULL;
+        }
+    }
+
+    SET_ERROR
     return accumulator;
 }
 
-T List_map(T list, Projection projection, Comparator c, Duplicator du, Deallocator de)
+T List_map(T list, Projection projection, Comparator c, Duplicator du, Deallocator de, int *error)
 {
-    T newList = List_create(c, du, de);
+    int errToSet = 0;
+    T newList = NULL;
 
-    struct Node *runner = list->head;
-    while (runner != NULL)
+    if (list == NULL)
     {
-        void *newValue = projection(runner->element);
-        List_insertTail(newList, newValue);
-        runner = runner->next;
+        errToSet = E_LIST_NULL;
     }
 
-    return newList;
-}
-
-T List_filter(T list, Predicate predicate, int useDuplicator)
-{
-    T newList = List_create(list->comparator, list->duplicator, list->deallocator);
-
-    struct Node *runner = list->head;
-    while (runner != NULL)
+    if (!errToSet && projection == NULL)
     {
-        int res = predicate(runner->element);
-        if (res == 1)
+        errToSet = E_LIST_INVALID_ARGUMENTS;
+    }
+
+    if (!errToSet)
+    {
+        newList = List_create(c, du, de, &errToSet);
+    }
+
+    if (!errToSet)
+    {
+        struct Node *runner = list->head;
+        while (runner != NULL && !errToSet)
         {
-            void *toInsert = useDuplicator ? list->duplicator(runner->element) : runner->element;
-            List_insertTail(newList, toInsert);
+            void *newValue = projection(runner->element, &errToSet);
+
+            if (!errToSet)
+            {
+                List_insertTail(newList, newValue, &errToSet);
+            }
+
+            runner = !errToSet ? runner->next : NULL;
         }
-        runner = runner->next;
     }
 
+    SET_ERROR
     return newList;
 }
 
-void List_forEach(T list, ForEachCallback callback)
+T List_filter(T list, Predicate predicate, int useDuplicator, int *error)
 {
-    struct Node *runner = list->head;
-    while (runner != NULL)
+
+    int errToSet = 0;
+    T newList = NULL;
+
+    if (list == NULL)
     {
-        callback(runner->element);
-        runner = runner->next;
+        errToSet = E_LIST_NULL;
     }
+
+    if (!errToSet && predicate == NULL)
+    {
+        errToSet = E_LIST_INVALID_ARGUMENTS;
+    }
+
+    if (!errToSet)
+    {
+        newList = List_create(list->comparator, list->duplicator, list->deallocator, &errToSet);
+    }
+
+    if (!errToSet)
+    {
+        struct Node *runner = list->head;
+        while (runner != NULL && !errToSet)
+        {
+            int res = predicate(runner->element);
+            void *toInsert = NULL;
+
+            if (res == 1 && useDuplicator)
+            {
+                toInsert = list->duplicator(runner->element, &errToSet);
+            }
+            else if (res == 1 && !useDuplicator)
+            {
+                toInsert = runner->element;
+            }
+
+            if (!errToSet && toInsert != NULL)
+            {
+                List_insertTail(newList, toInsert, &errToSet);
+            }
+
+            runner = !errToSet ? runner->next : NULL;
+        }
+    }
+
+    SET_ERROR
+    return newList;
 }
 
-void List_forEach_right(T list, ForEachCallback callback)
+void List_forEach(T list, ForEachCallback callback, int *error)
 {
-    struct Node *runner = list->tail;
-    while (runner != NULL)
+    int errToSet = 0;
+    if (list == NULL)
     {
-        callback(runner->element);
-        runner = runner->prev;
+        errToSet = E_LIST_NULL;
     }
+
+    if (!errToSet && callback == NULL)
+    {
+        errToSet = E_LIST_INVALID_ARGUMENTS;
+    }
+
+    if (!errToSet)
+    {
+        struct Node *runner = list->head;
+        while (runner != NULL && !errToSet)
+        {
+            callback(runner->element, &errToSet);
+            runner = !errToSet ? runner->next : NULL;
+        }
+    }
+
+    SET_ERROR
+}
+
+void List_forEachWithContext(T list, ForEachCallbackWithContext callback, void* context, int *error)
+{
+    int errToSet = 0;
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+
+    if (!errToSet && (callback == NULL || context == NULL))
+    {
+        errToSet = E_LIST_INVALID_ARGUMENTS;
+    }
+
+    if (!errToSet)
+    {
+        struct Node *runner = list->head;
+        while (runner != NULL && !errToSet)
+        {
+            callback(context, runner->element, &errToSet);
+            runner = !errToSet ? runner->next : NULL;
+        }
+    }
+
+    SET_ERROR
+}
+
+void List_forEach_right(T list, ForEachCallback callback, int *error)
+{
+    int errToSet = 0;
+    if (list == NULL)
+    {
+        errToSet = E_LIST_NULL;
+    }
+
+    if (!errToSet && callback == NULL)
+    {
+        errToSet = E_LIST_INVALID_ARGUMENTS;
+    }
+
+    if (!errToSet)
+    {
+        struct Node *runner = list->tail;
+        while (runner != NULL && !errToSet)
+        {
+            callback(runner->element, &errToSet);
+            runner = !errToSet ? runner->prev : NULL;
+        }
+    }
+
+    SET_ERROR
+}
+
+const char *list_error_messages[] = {
+    "",
+    "list internal malloc error",
+    "list is null",
+    "list cannot contain NULL elements",
+    "list is empty",
+    "one or more arguments are invalid"};
+
+const char *List_getErrorMessage(int errorCode)
+{
+    return list_error_messages[errorCode];
 }

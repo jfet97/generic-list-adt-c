@@ -4,7 +4,8 @@
 # make clean -> remove the binaries
 
 CFLAGS += -std=c99 -Wall -pedantic
-TARGET = main
+TARGET = bin/main
+BUILDDIR = bin
 
 debug: CFLAGS += -g
 debug: clean all
@@ -16,8 +17,12 @@ dist: clean all
 
 all: $(TARGET)
 
-main: ./main.c ../../liblist.a ../../list.h
-	$(CC) $(CFLAGS) $^ -I ../../ -L ../../ -llist -o $@
+../../liblist.a:
+	cd ../../ && $(MAKE)
+
+bin/main: ./main.c ../../liblist.a ../../list.h
+	(mkdir bin || true)
+	$(CC) $(CFLAGS) $^ -I ../../ -L ../..// -llist -o $@
 
 clean: 
-	-rm -f $(TARGET)
+	-rm -rf $(BUILDDIR)

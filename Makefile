@@ -3,8 +3,11 @@
 # make dist -> compile with compiler optimizations
 # make clean -> remove the binaries
 
-CFLAGS += -std=c99 -Wall -pedantic
+CFLAGS += -std=c99 -Wall -pedantic -Wno-unused-value
 TARGETS = liblist.a list.o
+
+nosuppress: CFLAGS += -Wunused-value
+nosuppress: clean all
 
 debug: CFLAGS += -g
 debug: clean all
@@ -19,7 +22,7 @@ all: $(TARGETS)
 liblist.a: list.o
 	 ar rvs $@ $<
 
-list.o: list.c list.h macroj.h
+list.o: list.c list.h
 	$(CC) $(CFLAGS) $< -c -o $@
 
 clean: 
