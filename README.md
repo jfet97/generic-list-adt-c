@@ -1,1 +1,1 @@
-# lista_generica_c
+# Generic list written in C
